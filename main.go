@@ -6,9 +6,11 @@ import (
 	"log"
 	"math/rand"
 	"net/http"
+	"os"
 	"strconv"
 
 	"github.com/gorilla/mux"
+	"github.com/joho/godotenv"
 )
 
 // La structure Question représente une question avec un identifiant unique et une chaîne de caractères pour la question.
@@ -20,6 +22,26 @@ type Question struct {
 // La variable "questions" est une tranche ("slice") de type "Question", qui sert à stocker toutes les questions.
 // En d'autres termes, il s'agit d'un tableau dynamique capable de stocker un nombre variable d'éléments de type "Question".
 var questions []Question
+
+// use godot package to load/read the .env file and
+// return the value of the key
+func goDotEnvVariable(key string) string {
+
+	// load .env file
+	err := godotenv.Load(".env")
+
+	if err != nil {
+		log.Fatalf("Error loading .env file")
+	}
+
+	return os.Getenv(key)
+}
+
+// renvoie une string quand on se connecte sur le endpoint /, permet de vérifier l'utilisation du .env
+func homeLink(w http.ResponseWriter, r *http.Request) {
+	dotenv := goDotEnvVariable("DBNAME")
+	fmt.Fprintf(w, dotenv)
+}
 
 // La fonction getQuestions renvoie toutes les questions sous forme de JSON.
 func getQuestions(w http.ResponseWriter, r *http.Request) {
@@ -86,6 +108,8 @@ func main() {
 	questions = append(questions, Question{ID: "2", Question: "Second question"})
 
 	// Ajoute les endpoints pour les différentes requêtes HTTP.
+	router.HandleFunc("/", homeLink).Methods("GET")
+
 	router.HandleFunc("/questions", getQuestions).Methods("GET")
 	router.HandleFunc("/questions/{id}", getQuestion).Methods("GET")
 	router.HandleFunc("/questions", createQuestion).Methods("POST")
