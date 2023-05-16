@@ -147,7 +147,9 @@ func printMessage(message string) {
 	fmt.Println("")
 }
 
-// get questions
+// --------------------- contrôleurs BDD ------------------------------
+
+// get all questions
 func getQuestionsSQL(w http.ResponseWriter, r *http.Request) {
 	db := setupDB()
 	printMessage("Getting questions...")
@@ -187,6 +189,58 @@ func getQuestionsSQL(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(response)
 }
 
+// Accède à une question
+func getQuestionSQL(w http.ResponseWriter, r *http.Request) {
+	params := mux.Vars(r)
+
+	questionID := params["id"]
+
+	var response = JsonResponse{}
+	var question Question
+
+	if questionID == "" {
+		response = JsonResponse{Type: "error", Message: "Missing question ID."}
+	} else {
+		db := setupDB()
+
+		printMessage("Getting question from DB")
+
+		retrieved, err := db.Query("SELECT from questions WHERE ID=$1", questionID)
+
+		checkErr(err)
+
+		for retrieved.Next() {
+			var id string
+			var questionText string
+			var answer1 string
+			var answer2 string
+			var answer3 string
+			var answer4 string
+			var correctAnswer int
+			err = retrieved.Scan(&id, &questionText, &answer1, &answer2, &answer3, &answer4, &correctAnswer)
+			// Vérifier les erreurs
+			checkErr(err)
+			question.ID = id
+			question.Question = questionText
+			question.Answer1 = answer1
+			question.Answer2 = answer2
+			question.Answer3 = answer3
+			question.Answer4 = answer4
+			question.CorrectAnswer = correctAnswer
+			
+			var response = JsonResponse{
+				Type:    "success",
+				//Data:    question.Question,
+				Message: "Question retrieved successfully!",
+			}
+			json.NewEncoder(w).Encode(response)	}
+
+	json.NewEncoder(w).Encode(response)
+	}
+}
+
+
+// Crée une question
 func createQuestionSQL(w http.ResponseWriter, r *http.Request) {
 	var question Question
 	_ = json.NewDecoder(r.Body).Decode(&question)
@@ -216,6 +270,61 @@ func createQuestionSQL(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(response)
 }
 
+// Supprime une question
+func deleteQuestionSQL(w http.ResponseWriter, r *http.Request) {
+	params := mux.Vars(r)
+
+	questionID := params["id"]
+
+	var response = JsonResponse{}
+
+	if questionID == "" {
+		response = JsonResponse{Type: "error", Message: "Missing question ID."}
+	} else {
+		db := setupDB()
+
+		printMessage("Deleting question from DB")
+
+		_, err := db.Exec("DELETE FROM questions where ID = $1", questionID)
+
+		// check errors
+		checkErr(err)
+
+		response = JsonResponse{Type: "success", Message: "The question has been deleted successfully!"}
+	}
+
+	json.NewEncoder(w).Encode(response)
+}
+
+// Modifie une question
+func updateQuestionSQL(w http.ResponseWriter, r *http.Request) {
+	params := mux.Vars(r)
+
+	questionID := params["id"]
+
+	var question Question
+	_ = json.NewDecoder(r.Body).Decode(&question)
+
+	var response = JsonResponse{}
+
+	if questionID == "" {
+		response = JsonResponse{Type: "error", Message: "Missing question ID."}
+	} else {
+		db := setupDB()
+
+		printMessage("Updating question from DB")
+
+		_, err := db.Exec("UPDATE questions SET question=$1, answer1=$2, answer2=$3, answer3=$4, answer4=$5, correct_answer=$6 WHERE ID = $7", question.Question, question.Answer1, question.Answer2, question.Answer3, question.Answer4, question.CorrectAnswer, questionID)
+
+		// check errors
+		checkErr(err)
+
+		response = JsonResponse{Type: "success", Message: "The question has been updated successfully : " + question.Question}
+	}
+
+	json.NewEncoder(w).Encode(response)
+}
+
 // ------------------------- MAIN et routes -------------------------------
 
 func main() {
@@ -228,10 +337,10 @@ func main() {
 	router.HandleFunc("/", homeLink).Methods("GET")
 
 	router.HandleFunc("/questions", getQuestionsSQL).Methods("GET")
-	router.HandleFunc("/questions/{id}", getQuestion).Methods("GET")
+	router.HandleFunc("/questions/{id}", getQuestionSQL).Methods("GET")
 	router.HandleFunc("/questions", createQuestionSQL).Methods("POST")
-	router.HandleFunc("/questions/{id}", updateQuestion).Methods("PUT")
-	router.HandleFunc("/questions/{id}", deleteQuestion).Methods("DELETE")
+	router.HandleFunc("/questions/{id}", updateQuestionSQL).Methods("PUT")
+	router.HandleFunc("/questions/{id}", deleteQuestionSQL).Methods("DELETE")
 	fmt.Printf("Starting server at port 8085\n")
 	log.Fatal(http.ListenAndServe(":8085", router))
 }
