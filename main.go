@@ -30,6 +30,7 @@ type Question struct {
 	CorrectAnswer int    `json:"correctAnswer"`
 }
 
+
 // La variable "questions" est une tranche ("slice") de type "Question", qui sert à stocker toutes les questions.
 // En d'autres termes, il s'agit d'un tableau dynamique capable de stocker un nombre variable d'éléments de type "Question".
 var questions []Question
@@ -485,6 +486,10 @@ func deleteUser(w http.ResponseWriter, r *http.Request) {
 // ------------------------- MAIN et routes -------------------------------
 
 func main() {
+
+	
+	SayHello()
+
 	// Initialise le routeur Mux et ajoute deux questions pour les tests.
 	router := mux.NewRouter()
 	questions = append(questions, Question{ID: "1", Question: "First question"})
