@@ -32,6 +32,15 @@ type Question struct {
 // En d'autres termes, il s'agit d'un tableau dynamique capable de stocker un nombre variable d'éléments de type "Question".
 var questions []Question
 
+type User struct {
+	ID       int    `json:"id"`
+	Name     string `json:"name"`
+	Email    string `json:"email"`
+	Password string `json:"password"`
+}
+
+var users []User
+
 // use godot package to load/read the .env file and
 // return the value of the key
 func goDotEnvVariable(key string) string {
@@ -149,6 +158,7 @@ func printMessage(message string) {
 
 // --------------------- contrôleurs BDD ------------------------------
 
+// ------------------------- Questions ---------------------------------
 // get all questions
 func getQuestionsSQL(w http.ResponseWriter, r *http.Request) {
 	db := setupDB()
@@ -205,7 +215,7 @@ func getQuestionSQL(w http.ResponseWriter, r *http.Request) {
 
 		printMessage("Getting question from DB")
 
-		retrieved, err := db.Query("SELECT from questions WHERE ID=$1", questionID)
+		retrieved, err := db.Query("SELECT * from questions WHERE ID=$1", questionID)
 
 		checkErr(err)
 
@@ -227,18 +237,18 @@ func getQuestionSQL(w http.ResponseWriter, r *http.Request) {
 			question.Answer3 = answer3
 			question.Answer4 = answer4
 			question.CorrectAnswer = correctAnswer
-			
+
 			var response = JsonResponse{
 				Type:    "success",
-				//Data:    question.Question,
+				Data:    []Question{question},
 				Message: "Question retrieved successfully!",
 			}
-			json.NewEncoder(w).Encode(response)	}
+			json.NewEncoder(w).Encode(response)
+		}
 
-	json.NewEncoder(w).Encode(response)
+		json.NewEncoder(w).Encode(response)
 	}
 }
-
 
 // Crée une question
 func createQuestionSQL(w http.ResponseWriter, r *http.Request) {
@@ -325,6 +335,151 @@ func updateQuestionSQL(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(response)
 }
 
+//------------------------- Users ---------------------------------
+
+func getUsers(w http.ResponseWriter, r *http.Request) {
+	db := setupDB()
+	printMessage("Getting users...")
+	rows, err := db.Query("SELECT id, name, email, password FROM users")
+	checkErr(err)
+	defer rows.Close()
+
+	var users []User
+	for rows.Next() {
+		var user User
+		err := rows.Scan(&user.ID, &user.Name, &user.Email, &user.Password)
+		checkErr(err)
+		users = append(users, user)
+	}
+
+	err = rows.Err()
+	checkErr(err)
+
+	json.NewEncoder(w).Encode(users)
+}
+
+func createUser(w http.ResponseWriter, r *http.Request) {
+	var user User
+	_ = json.NewDecoder(r.Body).Decode(&user)
+
+	printMessage("hello" + "" + user.Name)
+
+	var response = JsonResponse{}
+
+	if user.Name == "" || user.Email == "" || user.Password == "" {
+		response = JsonResponse{Type: "error", Message: "Missing data."}
+	} else {
+		db := setupDB()
+
+		printMessage("Creating user into DB")
+
+		fmt.Println("Inserting new user : " + user.Name)
+
+		var lastInsertID int
+		err := db.QueryRow("INSERT INTO users (name, email, password) VALUES ($1, $2, $3) returning id;", user.Name, user.Email, user.Password).Scan(&lastInsertID)
+
+		// check errors
+		checkErr(err)
+
+		response = JsonResponse{Type: "success", Message: "The user has been inserted successfully!"}
+	}
+
+	json.NewEncoder(w).Encode(response)
+}
+
+func getUser(w http.ResponseWriter, r *http.Request) {
+	db := setupDB()
+	params := mux.Vars(r)
+	userID := params["id"]
+
+	var user User
+	err := db.QueryRow("SELECT id, name, email, password FROM users WHERE id = $1", userID).Scan(&user.ID, &user.Name, &user.Email, &user.Password)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			http.NotFound(w, r)
+		} else {
+			log.Fatal(err)
+		}
+		return
+	}
+
+	json.NewEncoder(w).Encode(user)
+}
+
+func updateUser(w http.ResponseWriter, r *http.Request) {
+	params := mux.Vars(r)
+	userID := params["id"]
+
+	var user User
+	err := json.NewDecoder(r.Body).Decode(&user)
+	checkErr(err)
+
+	var response = JsonResponse{}
+
+	if userID == "" {
+		response = JsonResponse{Type: "error", Message: "Missing user ID."}
+	} else {
+		db := setupDB()
+
+		printMessage("Updating user from DB")
+
+		// Récupérer les données de l'utilisateur existant
+
+		var existingUser User
+		err := db.QueryRow("SELECT id, name, email, password FROM users WHERE id = $1", userID).Scan(&existingUser.ID, &existingUser.Name, &existingUser.Email, &existingUser.Password)
+
+		checkErr(err)
+
+		// Mettre à jour uniquement les champs non vides ou non nuls
+		if user.Name == "" {
+			if existingUser.Name != "" {
+				user.Name = existingUser.Name
+			}
+		}
+		if user.Email == "" {
+			if existingUser.Email != "" {
+				user.Email = existingUser.Email
+			}
+		}
+		if user.Password == "" {
+			if existingUser.Password != "" {
+				user.Password = existingUser.Password
+			}
+		}
+
+		_, err = db.Exec("UPDATE users SET name = $1, email = $2, password = $3 WHERE id = $4", user.Name, user.Email, user.Password, userID)
+		checkErr(err)
+
+		response = JsonResponse{Type: "success", Message: "User updated successfully!"}
+
+		w.WriteHeader(http.StatusOK)
+	}
+
+	json.NewEncoder(w).Encode(response)
+}
+
+func deleteUser(w http.ResponseWriter, r *http.Request) {
+	params := mux.Vars(r)
+	userID := params["id"]
+	var response = JsonResponse{}
+
+	if userID == "" {
+		response = JsonResponse{Type: "error", Message: "Missing user ID."}
+	} else {
+		db := setupDB()
+		printMessage("Deleting user from DB")
+
+		_, err := db.Exec("DELETE FROM users where ID = $1", userID)
+
+		// check errors
+		checkErr(err)
+
+		response = JsonResponse{Type: "success", Message: "The user has been deleted successfully!"}
+	}
+
+	json.NewEncoder(w).Encode(response)
+}
+
 // ------------------------- MAIN et routes -------------------------------
 
 func main() {
@@ -341,6 +496,13 @@ func main() {
 	router.HandleFunc("/questions", createQuestionSQL).Methods("POST")
 	router.HandleFunc("/questions/{id}", updateQuestionSQL).Methods("PUT")
 	router.HandleFunc("/questions/{id}", deleteQuestionSQL).Methods("DELETE")
+
+	router.HandleFunc("/users", getUsers).Methods("GET")
+	router.HandleFunc("/users", createUser).Methods("POST")
+	router.HandleFunc("/users/{id}", getUser).Methods("GET")
+	router.HandleFunc("/users/{id}", deleteUser).Methods("DELETE")
+	router.HandleFunc("/users/{id}", updateUser).Methods("PUT")
+
 	fmt.Printf("Starting server at port 8085\n")
 	log.Fatal(http.ListenAndServe(":8085", router))
 }
