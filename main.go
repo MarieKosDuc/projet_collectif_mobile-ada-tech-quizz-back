@@ -5,17 +5,16 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
-	"math/rand"
 	"net/http"
 	"os"
-	"strconv"
 
 	"github.com/gorilla/mux"
 	"github.com/joho/godotenv"
 	_ "github.com/lib/pq"
+	"golang.org/x/crypto/bcrypt"
 )
 
-// ------------------------- Modèles ----------------------------------
+// ------------------------- MODELES ----------------------------------
 
 // La structure Question représente une question avec un identifiant unique et une chaîne de caractères pour la question.
 type Question struct {
@@ -37,9 +36,19 @@ type User struct {
 	Name     string `json:"name"`
 	Email    string `json:"email"`
 	Password string `json:"password"`
+	Score    int    `json:"score"`
 }
 
 var users []User
+
+// Struct pour la réponse reçue au format json
+type JsonResponse struct {
+	Type    string     `json:"type"`
+	Data    []Question `json:"data"`
+	Message string     `json:"message"`
+}
+
+// ----------------- Connection à la BDD --------------------------------
 
 // use godot package to load/read the .env file and
 // return the value of the key
@@ -62,6 +71,13 @@ func checkErr(err error) {
 	}
 }
 
+// Function for handling messages
+func printMessage(message string) {
+	fmt.Println("")
+	fmt.Println(message)
+	fmt.Println("")
+}
+
 // connection à la base de données
 func setupDB() *sql.DB {
 	DB_NAME := goDotEnvVariable("DB_NAME")
@@ -76,14 +92,7 @@ func setupDB() *sql.DB {
 	return DB
 }
 
-// Struct pour la réponse reçue au format json
-type JsonResponse struct {
-	Type    string     `json:"type"`
-	Data    []Question `json:"data"`
-	Message string     `json:"message"`
-}
-
-// ------------------- Contrôleurs ------------------------------
+// ------------------------ CONTROLEURS ------------------------------
 
 // renvoie une string quand on se connecte sur le endpoint /
 func homeLink(w http.ResponseWriter, r *http.Request) {
@@ -91,75 +100,8 @@ func homeLink(w http.ResponseWriter, r *http.Request) {
 	fmt.Fprintf(w, "Hello!")
 }
 
-// La fonction getQuestions renvoie toutes les questions sous forme de JSON.
-func getQuestions(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(questions)
-}
-
-// La fonction deleteQuestion supprime une question spécifique de la slice des questions.
-func deleteQuestion(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "application/json")
-	params := mux.Vars(r)
-	for index, item := range questions {
-		if item.ID == params["id"] {
-			questions = append(questions[:index], questions[index+1:]...)
-			break
-		}
-	}
-	json.NewEncoder(w).Encode(questions)
-}
-
-// La fonction getQuestion renvoie une question spécifique par son ID.
-func getQuestion(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "application/json")
-	params := mux.Vars(r)
-	for _, item := range questions {
-		if item.ID == params["id"] {
-			json.NewEncoder(w).Encode(item)
-			break
-		}
-	}
-}
-
-// La fonction createQuestion crée une nouvelle question à partir des données JSON de la requête HTTP POST.
-func createQuestion(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "application/json")
-	var question Question
-	_ = json.NewDecoder(r.Body).Decode(&question)
-	question.ID = strconv.Itoa(rand.Intn(10000000))
-	questions = append(questions, question)
-	json.NewEncoder(w).Encode(questions)
-}
-
-// La fonction updateQuestion met à jour une question existante avec les données JSON de la requête HTTP PUT.
-func updateQuestion(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "application/json")
-	params := mux.Vars(r)
-	var question Question
-	_ = json.NewDecoder(r.Body).Decode(&question)
-	for index, item := range questions {
-		if item.ID == params["id"] {
-			questions = append(questions[:index], questions[index+1:]...)
-			question.ID = params["id"]
-			questions = append(questions, question)
-			break
-		}
-	}
-	json.NewEncoder(w).Encode(questions)
-}
-
-// Function for handling messages
-func printMessage(message string) {
-	fmt.Println("")
-	fmt.Println(message)
-	fmt.Println("")
-}
-
-// --------------------- contrôleurs BDD ------------------------------
-
 // ------------------------- Questions ---------------------------------
-// get all questions
+// Récupérer toutes les questions
 func getQuestionsSQL(w http.ResponseWriter, r *http.Request) {
 	db := setupDB()
 	printMessage("Getting questions...")
@@ -250,7 +192,7 @@ func getQuestionSQL(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// Crée une question
+// Créer une question
 func createQuestionSQL(w http.ResponseWriter, r *http.Request) {
 	var question Question
 	_ = json.NewDecoder(r.Body).Decode(&question)
@@ -280,7 +222,7 @@ func createQuestionSQL(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(response)
 }
 
-// Supprime une question
+// Supprimer une question
 func deleteQuestionSQL(w http.ResponseWriter, r *http.Request) {
 	params := mux.Vars(r)
 
@@ -306,7 +248,7 @@ func deleteQuestionSQL(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(response)
 }
 
-// Modifie une question
+// Modifier une question
 func updateQuestionSQL(w http.ResponseWriter, r *http.Request) {
 	params := mux.Vars(r)
 
@@ -337,6 +279,7 @@ func updateQuestionSQL(w http.ResponseWriter, r *http.Request) {
 
 //------------------------- Users ---------------------------------
 
+// Récupérer tous les utilisateurs
 func getUsers(w http.ResponseWriter, r *http.Request) {
 	db := setupDB()
 	printMessage("Getting users...")
@@ -358,9 +301,25 @@ func getUsers(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(users)
 }
 
+// Hash du mot de passe
+func HashPassword(password string) (string, error) {
+	bytes, err := bcrypt.GenerateFromPassword([]byte(password), 14)
+	return string(bytes), err
+}
+
+// Vérification du mot de passe
+func CheckPasswordHash(password, hash string) bool {
+	err := bcrypt.CompareHashAndPassword([]byte(hash), []byte(password))
+	return err == nil
+}
+
+// Créer un utilisateur
 func createUser(w http.ResponseWriter, r *http.Request) {
 	var user User
 	_ = json.NewDecoder(r.Body).Decode(&user)
+
+	var hashPassword string
+	hashPassword, _ = HashPassword(user.Password)
 
 	printMessage("hello" + "" + user.Name)
 
@@ -376,7 +335,7 @@ func createUser(w http.ResponseWriter, r *http.Request) {
 		fmt.Println("Inserting new user : " + user.Name)
 
 		var lastInsertID int
-		err := db.QueryRow("INSERT INTO users (name, email, password) VALUES ($1, $2, $3) returning id;", user.Name, user.Email, user.Password).Scan(&lastInsertID)
+		err := db.QueryRow("INSERT INTO users (name, email, password, score) VALUES ($1, $2, $3, 0) returning id;", user.Name, user.Email, hashPassword).Scan(&lastInsertID)
 
 		// check errors
 		checkErr(err)
@@ -387,6 +346,7 @@ func createUser(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(response)
 }
 
+// Récupérer les infos d'un utilisateur
 func getUser(w http.ResponseWriter, r *http.Request) {
 	db := setupDB()
 	params := mux.Vars(r)
@@ -406,6 +366,7 @@ func getUser(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(user)
 }
 
+// Mettre à jour les infos d'un utilisateur
 func updateUser(w http.ResponseWriter, r *http.Request) {
 	params := mux.Vars(r)
 	userID := params["id"]
@@ -458,6 +419,7 @@ func updateUser(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(response)
 }
 
+// Supprimer un utilisateur
 func deleteUser(w http.ResponseWriter, r *http.Request) {
 	params := mux.Vars(r)
 	userID := params["id"]
@@ -480,7 +442,7 @@ func deleteUser(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(response)
 }
 
-// ------------------------- MAIN et routes -------------------------------
+// ------------------------- MAIN et ROUTES -------------------------------
 
 func main() {
 	// Initialise le routeur Mux et ajoute deux questions pour les tests.
