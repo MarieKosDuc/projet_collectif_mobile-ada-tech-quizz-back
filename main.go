@@ -14,7 +14,7 @@ import (
 	"github.com/joho/godotenv"
 	_ "github.com/lib/pq"
 
-	"go-rest-api/hello"
+	"github.com/adatechschool/go-rest-api/hello"
 )
 
 // ------------------------- Modèles ----------------------------------
@@ -29,7 +29,6 @@ type Question struct {
 	Answer4       string `json:"answer4"`
 	CorrectAnswer int    `json:"correctAnswer"`
 }
-
 
 // La variable "questions" est une tranche ("slice") de type "Question", qui sert à stocker toutes les questions.
 // En d'autres termes, il s'agit d'un tableau dynamique capable de stocker un nombre variable d'éléments de type "Question".
@@ -487,8 +486,7 @@ func deleteUser(w http.ResponseWriter, r *http.Request) {
 
 func main() {
 
-	
-	SayHello()
+	hello.SayHello()
 
 	// Initialise le routeur Mux et ajoute deux questions pour les tests.
 	router := mux.NewRouter()
