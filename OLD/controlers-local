@@ -1,0 +1,73 @@
+import (
+	"database/sql"
+	"encoding/json"
+	"fmt"
+	"log"
+	"math/rand"
+	"net/http"
+	"os"
+	"strconv"
+
+	"github.com/gorilla/mux"
+	"github.com/joho/godotenv"
+	_ "github.com/lib/pq"
+)
+
+// La fonction getQuestions renvoie toutes les questions sous forme de JSON.
+func getQuestions(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(questions)
+}
+
+// La fonction deleteQuestion supprime une question spécifique de la slice des questions.
+func deleteQuestion(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	params := mux.Vars(r)
+	for index, item := range questions {
+		if item.ID == params["id"] {
+			questions = append(questions[:index], questions[index+1:]...)
+			break
+		}
+	}
+	json.NewEncoder(w).Encode(questions)
+}
+
+// La fonction getQuestion renvoie une question spécifique par son ID.
+func getQuestion(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	params := mux.Vars(r)
+	for _, item := range questions {
+		if item.ID == params["id"] {
+			json.NewEncoder(w).Encode(item)
+			break
+		}
+	}
+}
+
+// La fonction createQuestion crée une nouvelle question à partir des données JSON de la requête HTTP POST.
+func createQuestion(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	var question Question
+	_ = json.NewDecoder(r.Body).Decode(&question)
+	question.ID = strconv.Itoa(rand.Intn(10000000))
+	questions = append(questions, question)
+	json.NewEncoder(w).Encode(questions)
+}
+
+// La fonction updateQuestion met à jour une question existante avec les données JSON de la requête HTTP PUT.
+func updateQuestion(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	params := mux.Vars(r)
+	var question Question
+	_ = json.NewDecoder(r.Body).Decode(&question)
+	for index, item := range questions {
+		if item.ID == params["id"] {
+			questions = append(questions[:index], questions[index+1:]...)
+			question.ID = params["id"]
+			questions = append(questions, question)
+			break
+		}
+	}
+	json.NewEncoder(w).Encode(questions)
+}
+
