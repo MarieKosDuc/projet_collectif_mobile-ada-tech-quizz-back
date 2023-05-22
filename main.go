@@ -13,6 +13,8 @@ import (
 	"github.com/gorilla/mux"
 	"github.com/joho/godotenv"
 	_ "github.com/lib/pq"
+
+	"https://github.com/adatechschool/-projet_collectif_mobile-ada-tech-quizz-back/hello"
 )
 
 // ------------------------- Modèles ----------------------------------
@@ -483,6 +485,9 @@ func deleteUser(w http.ResponseWriter, r *http.Request) {
 // ------------------------- MAIN et routes -------------------------------
 
 func main() {
+
+	hello.SayHello()
+
 	// Initialise le routeur Mux et ajoute deux questions pour les tests.
 	router := mux.NewRouter()
 	questions = append(questions, Question{ID: "1", Question: "First question"})
