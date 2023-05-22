@@ -133,12 +133,8 @@ func getQuestionsSQL(w http.ResponseWriter, r *http.Request) {
 		}
 		questions = append(questions, question)
 	}
-	var response = JsonResponse{
-		Type:    "success",
-		Data:    questions,
-		Message: "Questions retrieved successfully!",
-	}
-	json.NewEncoder(w).Encode(response)
+
+	json.NewEncoder(w).Encode(questions)
 }
 
 // Accède à une question
