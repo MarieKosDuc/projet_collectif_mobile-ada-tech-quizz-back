@@ -14,7 +14,7 @@ import (
 	"github.com/joho/godotenv"
 	_ "github.com/lib/pq"
 
-	"github.com/adatechschool/go-rest-api/hello"
+	"https://github.com/adatechschool/-projet_collectif_mobile-ada-tech-quizz-back/hello"
 )
 
 // ------------------------- Modèles ----------------------------------
