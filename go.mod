@@ -1,6 +1,7 @@
-module go-rest-api
+module github.com/adatechschool/-projet_collectif_mobile-ada-tech-quizz-back
 
 go 1.20
+
 
 require github.com/gorilla/mux v1.8.0
 

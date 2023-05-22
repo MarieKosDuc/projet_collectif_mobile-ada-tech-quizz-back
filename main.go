@@ -12,7 +12,7 @@ import (
 	"github.com/joho/godotenv"
 	_ "github.com/lib/pq"
 	"golang.org/x/crypto/bcrypt"
-)
+
 
 // ------------------------- MODELES ----------------------------------
 
@@ -445,6 +445,9 @@ func deleteUser(w http.ResponseWriter, r *http.Request) {
 // ------------------------- MAIN et ROUTES -------------------------------
 
 func main() {
+
+	hello.SayHello()
+
 	// Initialise le routeur Mux et ajoute deux questions pour les tests.
 	router := mux.NewRouter()
 	questions = append(questions, Question{ID: "1", Question: "First question"})
