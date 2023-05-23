@@ -143,11 +143,10 @@ func getQuestionSQL(w http.ResponseWriter, r *http.Request) {
 
 	questionID := params["id"]
 
-	var response = JsonResponse{}
 	var question Question
 
 	if questionID == "" {
-		response = JsonResponse{Type: "error", Message: "Missing question ID."}
+
 	} else {
 		db := setupDB()
 
@@ -176,15 +175,10 @@ func getQuestionSQL(w http.ResponseWriter, r *http.Request) {
 			question.Answer4 = answer4
 			question.CorrectAnswer = correctAnswer
 
-			var response = JsonResponse{
-				Type:    "success",
-				Data:    []Question{question},
-				Message: "Question retrieved successfully!",
-			}
-			json.NewEncoder(w).Encode(response)
+			//json.NewEncoder(w).Encode(question)
 		}
 
-		json.NewEncoder(w).Encode(response)
+		json.NewEncoder(w).Encode(question)
 	}
 }
 
