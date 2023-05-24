@@ -432,6 +432,62 @@ func deleteUser(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(response)
 }
 
+// ----------------------------- MIDDLEWARE -------------------------------
+
+type Data struct {
+	Email    string `json:"email"`
+	Password string `json:"password"`
+}
+
+func LoginHandler(w http.ResponseWriter, r *http.Request) {
+	printMessage("Received auth demand")
+
+	if r.Method != "POST" {
+		http.Error(w, "Method Not Supported", http.StatusMethodNotAllowed)
+		return
+	}
+
+	// Get username and password from the request body
+	var data Data
+	_ = json.NewDecoder(r.Body).Decode(&data)
+
+	printMessage("Received" + data.Email + " " + data.Password)
+
+	// hash paswword
+	var hashPassword string
+	hashPassword, _ = HashPassword(data.Password)
+
+	// search for user infos in database
+	db := setupDB()
+	var user User
+	err := db.QueryRow("SELECT id, name, email, password FROM users WHERE email = $1", data.Email).Scan(&user.ID, &user.Name, &user.Email, &user.Password)
+	printMessage("received :" + user.Email + " " + user.Password + " " + user.Name)
+	
+	if err != nil {
+		printMessage("no error from DB")
+		if err == sql.ErrNoRows {
+			printMessage("no rows from DB")
+			http.NotFound(w, r)
+		} else {
+			printMessage("error from DB")
+			log.Fatal(err)
+		}
+		return
+		// if user exists, check password
+	} else {
+		printMessage("hashing" + hashPassword + " user PWD " + user.Password)
+		if hashPassword == user.Password {
+			printMessage("password ok")
+			w.WriteHeader(http.StatusOK)
+			json.NewEncoder(w).Encode("user logged in")
+		} else {
+			printMessage("password not ok")
+			w.WriteHeader(http.StatusUnauthorized)
+			json.NewEncoder(w).Encode("wrong password")
+		}
+	}
+}
+
 // ------------------------- MAIN et ROUTES -------------------------------
 
 func main() {
@@ -455,6 +511,8 @@ func main() {
 	router.HandleFunc("/users/{id}", getUser).Methods("GET")
 	router.HandleFunc("/users/{id}", deleteUser).Methods("DELETE")
 	router.HandleFunc("/users/{id}", updateUser).Methods("PUT")
+
+	router.HandleFunc("/login", LoginHandler).Methods("POST")
 
 	fmt.Printf("Starting server at port 8085\n")
 	log.Fatal(http.ListenAndServe(":8085", router))
