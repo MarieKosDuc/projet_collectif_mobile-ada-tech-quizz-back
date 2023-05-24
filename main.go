@@ -32,11 +32,13 @@ type Question struct {
 var questions []Question
 
 type User struct {
-	ID       int    `json:"id"`
-	Name     string `json:"name"`
-	Email    string `json:"email"`
-	Password string `json:"password"`
-	Score    int    `json:"score"`
+	ID             int    `json:"id"`
+	Name           string `json:"name"`
+	Email          string `json:"email"`
+	Password       string `json:"password"`
+	BestScore      int    `json:"bestScore"`
+	TotalQuestions int    `json:"totalQuestions"`
+	TotalPoints    int    `json:"totalPoints"`
 }
 
 var users []User
@@ -309,6 +311,7 @@ func createUser(w http.ResponseWriter, r *http.Request) {
 	_ = json.NewDecoder(r.Body).Decode(&user)
 
 	var hashPassword string
+
 	hashPassword, _ = HashPassword(user.Password)
 
 	printMessage("hello" + "" + user.Name)
@@ -325,7 +328,7 @@ func createUser(w http.ResponseWriter, r *http.Request) {
 		fmt.Println("Inserting new user : " + user.Name)
 
 		var lastInsertID int
-		err := db.QueryRow("INSERT INTO users (name, email, password, score) VALUES ($1, $2, $3, 0) returning id;", user.Name, user.Email, hashPassword).Scan(&lastInsertID)
+		err := db.QueryRow("INSERT INTO users (name, email, password, best_score, total_questions, total_points) VALUES ($1, $2, $3, 0, 0, 0) returning id;", user.Name, user.Email, hashPassword).Scan(&lastInsertID)
 
 		// check errors
 		checkErr(err)
@@ -343,7 +346,7 @@ func getUser(w http.ResponseWriter, r *http.Request) {
 	userID := params["id"]
 
 	var user User
-	err := db.QueryRow("SELECT id, name, email, password FROM users WHERE id = $1", userID).Scan(&user.ID, &user.Name, &user.Email, &user.Password)
+	err := db.QueryRow("SELECT id, name, email, password, best_score, total_questions, total_points FROM users WHERE id = $1", userID).Scan(&user.ID, &user.Name, &user.Email, &user.Password, &user.BestScore, &user.TotalQuestions, &user.TotalPoints)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			http.NotFound(w, r)
@@ -377,7 +380,7 @@ func updateUser(w http.ResponseWriter, r *http.Request) {
 		// Récupérer les données de l'utilisateur existant
 
 		var existingUser User
-		err := db.QueryRow("SELECT id, name, email, password FROM users WHERE id = $1", userID).Scan(&existingUser.ID, &existingUser.Name, &existingUser.Email, &existingUser.Password)
+		err := db.QueryRow("SELECT id, name, email, password, best_score, total_questions, total_points FROM users WHERE id = $1", userID).Scan(&existingUser.ID, &existingUser.Name, &existingUser.Email, &existingUser.Password, &existingUser.BestScore, &existingUser.TotalQuestions, &existingUser.TotalPoints)
 
 		checkErr(err)
 
@@ -398,7 +401,7 @@ func updateUser(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 
-		_, err = db.Exec("UPDATE users SET name = $1, email = $2, password = $3 WHERE id = $4", user.Name, user.Email, user.Password, userID)
+		_, err = db.Exec("UPDATE users SET name = $1, email = $2, password = $3, best_score = $4, total_questions = $5, total_points = $6 WHERE id = $7", user.Name, user.Email, user.Password, user.BestScore, user.TotalQuestions, user.TotalPoints, userID)
 		checkErr(err)
 
 		response = JsonResponse{Type: "success", Message: "User updated successfully!"}
@@ -432,6 +435,71 @@ func deleteUser(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(response)
 }
 
+// ----------------------------- MIDDLEWARE -------------------------------
+
+type DataReceived struct {
+	Email    string `json:"email"`
+	Password string `json:"password"`
+}
+
+type DataSent struct {
+	ID             int    `json:"id"`
+	Name           string `json:"name"`
+	BestScore      int    `json:"bestScore"`
+	TotalQuestions int    `json:"totalQuestions"`
+	TotalPoints    int    `json:"totalPoints"`
+}
+
+func LoginHandler(w http.ResponseWriter, r *http.Request) {
+	printMessage("Received auth demand")
+
+	if r.Method != "POST" {
+		http.Error(w, "Method Not Supported", http.StatusMethodNotAllowed)
+		return
+	}
+
+	// Get username and password from the request body
+	var data DataReceived
+	_ = json.NewDecoder(r.Body).Decode(&data)
+
+	printMessage("Received" + data.Email + " " + data.Password)
+
+	// hash paswword
+	var hashPassword string
+	hashPassword, _ = HashPassword(data.Password)
+
+	// search for user infos in database
+	db := setupDB()
+	var user User
+	err := db.QueryRow("SELECT * FROM users WHERE email = $1", data.Email).Scan(&user.ID, &user.Name, &user.Email, &user.Password, &user.BestScore, &user.TotalQuestions, &user.TotalPoints)
+	printMessage("received :" + user.Email + " " + user.Password + " " + user.Name)
+
+	if err != nil {
+		printMessage("no error from DB")
+		if err == sql.ErrNoRows {
+			printMessage("no rows from DB")
+			http.NotFound(w, r)
+		} else {
+			printMessage("error from DB")
+			log.Fatal(err)
+		}
+		return
+		// if user exists, check password
+	} else {
+		printMessage("hashing" + hashPassword + " user PWD " + user.Password)
+		if CheckPasswordHash(data.Password, user.Password) {
+			printMessage("password OK")
+			w.WriteHeader(http.StatusOK)
+			dataSent := DataSent{ID: user.ID, Name: user.Name, BestScore: user.BestScore, TotalQuestions: user.TotalQuestions, TotalPoints: user.TotalPoints}
+			json.NewEncoder(w).Encode(dataSent)
+		} else {
+			printMessage("password KO")
+			w.WriteHeader(http.StatusUnauthorized)
+			json.NewEncoder(w).Encode("wrong password")
+		}
+	}
+}
+
 // ------------------------- MAIN et ROUTES -------------------------------
 
 func main() {
@@ -455,6 +523,8 @@ func main() {
 	router.HandleFunc("/users/{id}", getUser).Methods("GET")
 	router.HandleFunc("/users/{id}", deleteUser).Methods("DELETE")
 	router.HandleFunc("/users/{id}", updateUser).Methods("PUT")
+
+	router.HandleFunc("/login", LoginHandler).Methods("POST")
 
 	fmt.Printf("Starting server at port 8085\n")
 	log.Fatal(http.ListenAndServe(":8085", router))
