@@ -309,6 +309,7 @@ func createUser(w http.ResponseWriter, r *http.Request) {
 	_ = json.NewDecoder(r.Body).Decode(&user)
 
 	var hashPassword string
+
 	hashPassword, _ = HashPassword(user.Password)
 
 	printMessage("hello" + "" + user.Name)
@@ -434,9 +435,14 @@ func deleteUser(w http.ResponseWriter, r *http.Request) {
 
 // ----------------------------- MIDDLEWARE -------------------------------
 
-type Data struct {
+type DataReceived struct {
 	Email    string `json:"email"`
 	Password string `json:"password"`
+}
+
+type DataSent struct {
+	Name  string `json:"name"`
+	Score int    `json:"score"`
 }
 
 func LoginHandler(w http.ResponseWriter, r *http.Request) {
@@ -448,7 +454,7 @@ func LoginHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Get username and password from the request body
-	var data Data
+	var data DataReceived
 	_ = json.NewDecoder(r.Body).Decode(&data)
 
 	printMessage("Received" + data.Email + " " + data.Password)
@@ -462,7 +468,7 @@ func LoginHandler(w http.ResponseWriter, r *http.Request) {
 	var user User
 	err := db.QueryRow("SELECT id, name, email, password FROM users WHERE email = $1", data.Email).Scan(&user.ID, &user.Name, &user.Email, &user.Password)
 	printMessage("received :" + user.Email + " " + user.Password + " " + user.Name)
-	
+
 	if err != nil {
 		printMessage("no error from DB")
 		if err == sql.ErrNoRows {
@@ -476,12 +482,13 @@ func LoginHandler(w http.ResponseWriter, r *http.Request) {
 		// if user exists, check password
 	} else {
 		printMessage("hashing" + hashPassword + " user PWD " + user.Password)
-		if hashPassword == user.Password {
-			printMessage("password ok")
+		if CheckPasswordHash(data.Password, user.Password) {
+			printMessage("password OK")
 			w.WriteHeader(http.StatusOK)
-			json.NewEncoder(w).Encode("user logged in")
+			dataSent := DataSent{Name: user.Name, Score: user.Score}
+			json.NewEncoder(w).Encode(dataSent)
 		} else {
-			printMessage("password not ok")
+			printMessage("password KO")
 			w.WriteHeader(http.StatusUnauthorized)
 			json.NewEncoder(w).Encode("wrong password")
 		}
